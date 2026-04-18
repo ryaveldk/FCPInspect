@@ -1,0 +1,11 @@
+.DS_Store
+.build/
+.swiftpm/
+Package.resolved
+*.xcodeproj
+xcuserdata/
+DerivedData/
+.vscode/
+
+# User scratch area — canonical fixtures live in test-fixtures/
+XML AF MULTICAM DUPLET/
