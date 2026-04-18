@@ -4,12 +4,13 @@ import PackageDescription
 let package = Package(
     name: "FCPInspect",
     platforms: [
-        .macOS(.v12)
+        .macOS(.v13)
     ],
     products: [
         .library(name: "FCPInspectCore", targets: ["FCPInspectCore"]),
         .library(name: "FCPInspectAnalysis", targets: ["FCPInspectAnalysis"]),
-        .executable(name: "fcpinspect-cli", targets: ["fcpinspect-cli"])
+        .executable(name: "fcpinspect-cli", targets: ["fcpinspect-cli"]),
+        .executable(name: "FCPInspect", targets: ["FCPInspect"])
     ],
     targets: [
         .target(
@@ -25,6 +26,11 @@ let package = Package(
             name: "fcpinspect-cli",
             dependencies: ["FCPInspectCore", "FCPInspectAnalysis"],
             path: "Sources/fcpinspect-cli"
+        ),
+        .executableTarget(
+            name: "FCPInspect",
+            dependencies: ["FCPInspectCore", "FCPInspectAnalysis"],
+            path: "Sources/FCPInspect"
         ),
         .testTarget(
             name: "FCPInspectCoreTests",
