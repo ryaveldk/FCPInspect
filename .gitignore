@@ -9,3 +9,6 @@ DerivedData/
 
 # User scratch area — canonical fixtures live in test-fixtures/
 XML AF MULTICAM DUPLET/
+
+# Internal brief — kept locally until a private repo is available
+FCPInspect_claude_code_brief.md
