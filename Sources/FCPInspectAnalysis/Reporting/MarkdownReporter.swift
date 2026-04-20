@@ -1,23 +1,35 @@
 import Foundation
-import FCPInspectAnalysis
 import FCPInspectCore
 
-/// Renders a Milestone 1 analysis run as a markdown report. The shape
-/// follows the brief's sample output.
-struct MarkdownReporter {
+/// Renders an analysis run as a markdown document. Used by the CLI, by
+/// the Copy/Save-report actions in the SwiftUI app, and by anything that
+/// wants a shareable textual representation of a run.
+public struct MarkdownReporter {
 
-    let sourceFiles: [URL]
-    let document: FCPXMLDocument
-    let checks: [Check]
-    let findings: [Finding]
+    public let sourceFiles: [URL]
+    public let document: FCPXMLDocument
+    public let checks: [Check]
+    public let findings: [Finding]
 
-    func render() -> String {
+    public init(
+        sourceFiles: [URL],
+        document: FCPXMLDocument,
+        checks: [Check],
+        findings: [Finding]
+    ) {
+        self.sourceFiles = sourceFiles
+        self.document = document
+        self.checks = checks
+        self.findings = findings
+    }
+
+    public func render() -> String {
         var out = ""
         out += "# FCPInspect Report\n\n"
 
         if sourceFiles.count == 1 {
             out += "**File:** \(sourceFiles[0].lastPathComponent)\n"
-        } else {
+        } else if !sourceFiles.isEmpty {
             out += "**Files (\(sourceFiles.count)):**\n"
             for file in sourceFiles {
                 out += "- \(file.lastPathComponent)\n"
@@ -33,11 +45,17 @@ struct MarkdownReporter {
         }
 
         for finding in findings {
-            out += "## \(emoji(for: finding.severity)) \(finding.title)\n\n"
+            out += "## \(Self.emoji(for: finding.severity)) \(finding.title)\n\n"
             out += finding.description
             if !finding.description.hasSuffix("\n") { out += "\n" }
             if let remediation = finding.suggestedRemediation {
                 out += "\n**Suggested remediation:** \(remediation)\n"
+            }
+            if !finding.location.isEmpty {
+                out += "\n**XML locations:**\n"
+                for location in finding.location {
+                    out += "- `\(location.xpath)`\n"
+                }
             }
             out += "\n"
         }
@@ -45,7 +63,7 @@ struct MarkdownReporter {
         return out
     }
 
-    private func emoji(for severity: Finding.Severity) -> String {
+    private static func emoji(for severity: Finding.Severity) -> String {
         switch severity {
         case .info: return "ℹ️"
         case .warning: return "⚠️"
