@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var state: AppState
     @State private var isShowingHelp = false
+    @State private var copyFeedbackVisible = false
 
     var body: some View {
         NavigationSplitView {
@@ -20,6 +21,30 @@ struct ContentView: View {
                 toolbarSummary
             }
             ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button {
+                        state.copyReportToPasteboard()
+                        flashCopyFeedback()
+                    } label: {
+                        Label("Kopier rapport", systemImage: "doc.on.clipboard")
+                    }
+                    .disabled(state.isEmpty)
+
+                    Button {
+                        state.presentSaveReportPanel()
+                    } label: {
+                        Label("Gem rapport…", systemImage: "square.and.arrow.down")
+                    }
+                    .disabled(state.isEmpty)
+                } label: {
+                    Label(copyFeedbackVisible ? "Kopieret ✓" : "Rapport",
+                          systemImage: "square.and.arrow.up")
+                }
+                .help("Eksportér scanning-rapporten som markdown")
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+            }
+            ToolbarItem(placement: .primaryAction) {
                 Button {
                     isShowingHelp = true
                 } label: {
@@ -34,6 +59,13 @@ struct ContentView: View {
         .background(Theme.canvas)
         .preferredColorScheme(.dark)
         .acceptsFCPXMLDrops()
+    }
+
+    private func flashCopyFeedback() {
+        copyFeedbackVisible = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+            copyFeedbackVisible = false
+        }
     }
 
     private var toolbarSummary: some View {

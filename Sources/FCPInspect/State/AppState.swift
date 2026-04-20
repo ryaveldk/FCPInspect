@@ -97,6 +97,51 @@ final class AppState: ObservableObject {
         }
     }
 
+    // MARK: Reporting
+
+    /// Builds the same markdown report that `fcpinspect-cli` emits — useful
+    /// for copy/save actions and for pasting into bug reports.
+    func renderReport() -> String {
+        let merged = FCPXMLDocument(
+            version: sources.first?.document.version ?? "",
+            medias: sources.flatMap { $0.document.medias }
+        )
+        return MarkdownReporter(
+            sourceFiles: sources.map(\.url),
+            document: merged,
+            checks: engine.checks,
+            findings: findings
+        ).render()
+    }
+
+    func copyReportToPasteboard() {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(renderReport(), forType: .string)
+    }
+
+    func presentSaveReportPanel() {
+        let panel = NSSavePanel()
+        panel.title = "Gem FCPInspect-rapport"
+        panel.nameFieldStringValue = suggestedReportFilename()
+        panel.allowedContentTypes = [.plainText]
+
+        if panel.runModal() == .OK, let url = panel.url {
+            do {
+                try renderReport().write(to: url, atomically: true, encoding: .utf8)
+            } catch {
+                errorMessages = ["Kunne ikke gemme rapport: \(error.localizedDescription)"]
+            }
+        }
+    }
+
+    private func suggestedReportFilename() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd-HHmm"
+        let stamp = formatter.string(from: Date())
+        return "FCPInspect-\(stamp).md"
+    }
+
     // MARK: Internals
 
     private func rerunChecks() {
