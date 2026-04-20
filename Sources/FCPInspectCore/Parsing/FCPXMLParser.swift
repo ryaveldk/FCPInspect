@@ -52,10 +52,11 @@ public final class FCPXMLParser {
 
         let version = root.attribute(forName: "version")?.stringValue ?? ""
 
-        let mediaElements: [XMLElement] = root
-            .elements(forName: "resources")
-            .first?
-            .elements(forName: "media") ?? []
+        // Resources
+        let resourcesElement = root.elements(forName: "resources").first
+        let mediaElements = resourcesElement?.elements(forName: "media") ?? []
+        let assetElements = resourcesElement?.elements(forName: "asset") ?? []
+        let formatElements = resourcesElement?.elements(forName: "format") ?? []
 
         let medias = try mediaElements.enumerated().map { idx, element in
             try parseMedia(
@@ -63,8 +64,41 @@ public final class FCPXMLParser {
                 xpath: "/fcpxml/resources/media[\(idx + 1)]"
             )
         }
+        let assets = assetElements.enumerated().map { idx, element in
+            parseAsset(
+                element,
+                xpath: "/fcpxml/resources/asset[\(idx + 1)]"
+            )
+        }
+        let formats = formatElements.enumerated().map { idx, element in
+            parseFormat(
+                element,
+                xpath: "/fcpxml/resources/format[\(idx + 1)]"
+            )
+        }
 
-        return FCPXMLDocument(version: version, medias: medias)
+        // Library / events / projects
+        let library: Library? = root.elements(forName: "library").first.map { libraryElement in
+            let location = libraryElement.attribute(forName: "location")?.stringValue
+            let events = libraryElement.elements(forName: "event").enumerated().map { idx, element in
+                parseEvent(element, xpath: "/fcpxml/library/event[\(idx + 1)]")
+            }
+            return Library(location: location, events: events)
+        }
+
+        // Cheap aggregate counts via XPath descendant scan.
+        let markerCount = (try? root.nodes(forXPath: ".//marker").count) ?? 0
+        let keywordCount = (try? root.nodes(forXPath: ".//keyword").count) ?? 0
+
+        return FCPXMLDocument(
+            version: version,
+            library: library,
+            assets: assets,
+            formats: formats,
+            medias: medias,
+            markerCount: markerCount,
+            keywordCount: keywordCount
+        )
     }
 
     // MARK: URL resolution
@@ -161,6 +195,88 @@ public final class FCPXMLParser {
             audioRole: attrs["audioRole"],
             location: XMLLocation(xpath: xpath)
         )
+    }
+
+    // MARK: Asset / Format
+
+    private func parseAsset(_ element: XMLElement, xpath: String) -> Asset {
+        let attrs = attributeDictionary(element)
+        return Asset(
+            id: attrs["id"] ?? "",
+            name: attrs["name"] ?? "",
+            uid: attrs["uid"],
+            src: attrs["src"],
+            start: attrs["start"].flatMap { try? Rational.parse($0) },
+            duration: attrs["duration"].flatMap { try? Rational.parse($0) },
+            hasVideo: attrs["hasVideo"] == "1",
+            hasAudio: attrs["hasAudio"] == "1",
+            format: attrs["format"],
+            videoSources: attrs["videoSources"].flatMap(Int.init),
+            audioSources: attrs["audioSources"].flatMap(Int.init),
+            audioChannels: attrs["audioChannels"].flatMap(Int.init),
+            audioRate: attrs["audioRate"].flatMap(Int.init),
+            metadata: metadataEntries(in: element),
+            location: XMLLocation(xpath: xpath)
+        )
+    }
+
+    private func parseFormat(_ element: XMLElement, xpath: String) -> Format {
+        let attrs = attributeDictionary(element)
+        return Format(
+            id: attrs["id"] ?? "",
+            name: attrs["name"],
+            frameDuration: attrs["frameDuration"].flatMap { try? Rational.parse($0) },
+            width: attrs["width"].flatMap(Int.init),
+            height: attrs["height"].flatMap(Int.init),
+            colorSpace: attrs["colorSpace"],
+            location: XMLLocation(xpath: xpath)
+        )
+    }
+
+    // MARK: Library / Event / Project
+
+    private func parseEvent(_ element: XMLElement, xpath: String) -> Event {
+        let attrs = attributeDictionary(element)
+        let projects = element.elements(forName: "project").enumerated().map { idx, el in
+            parseProject(el, xpath: xpath + "/project[\(idx + 1)]")
+        }
+        return Event(
+            name: attrs["name"] ?? "",
+            uid: attrs["uid"],
+            projects: projects
+        )
+    }
+
+    private func parseProject(_ element: XMLElement, xpath: String) -> Project {
+        let attrs = attributeDictionary(element)
+        let sequenceElement = element.elements(forName: "sequence").first
+        let seqAttrs = sequenceElement.map(attributeDictionary) ?? [:]
+        return Project(
+            name: attrs["name"] ?? "",
+            id: attrs["id"],
+            uid: attrs["uid"],
+            modDateRaw: attrs["modDate"],
+            modDate: attrs["modDate"].flatMap(Self.parseModDate),
+            sequenceFormat: seqAttrs["format"],
+            sequenceDuration: seqAttrs["duration"].flatMap { try? Rational.parse($0) },
+            location: XMLLocation(xpath: xpath)
+        )
+    }
+
+    // MARK: Metadata
+
+    /// Collects all `<md key value/>` entries inside the element's own
+    /// `<metadata>` child (non-recursive — we don't want to pick up
+    /// metadata from nested clips under an asset).
+    private func metadataEntries(in element: XMLElement) -> [MetadataEntry] {
+        guard let metadataElement = element.elements(forName: "metadata").first else {
+            return []
+        }
+        return metadataElement.elements(forName: "md").compactMap { md in
+            let attrs = attributeDictionary(md)
+            guard let key = attrs["key"] else { return nil }
+            return MetadataEntry(key: key, value: attrs["value"] ?? "")
+        }
     }
 
     // MARK: Utilities
