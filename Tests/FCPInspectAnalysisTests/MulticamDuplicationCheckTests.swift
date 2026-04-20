@@ -73,7 +73,7 @@ final class MulticamDuplicationCheckTests: XCTestCase {
         XCTAssertEqual(finding.checkID, "multicam-duplication")
         XCTAssertEqual(finding.location.count, 3, "all three media locations should be attached")
 
-        // ORIG has the newest modDate → is the authoritative master.
+        // All three UIDs must be surfaced.
         XCTAssertTrue(
             finding.description.contains("bE6PqP2TRO2D7xuONhMJQA"),
             "ORIG UID should appear in finding"
@@ -87,12 +87,13 @@ final class MulticamDuplicationCheckTests: XCTestCase {
             "duplet2 UID should appear"
         )
 
-        // Authoritative master comes before either ghost in the text.
+        // Oldest modDate comes first. The duplets are both 2026-03-02 and
+        // ORIG is 2026-04-15, so a duplet UID appears before the ORIG UID.
         let origRange = try XCTUnwrap(finding.description.range(of: "bE6PqP2TRO2D7xuONhMJQA"))
         let ghost1Range = try XCTUnwrap(finding.description.range(of: "ARyUeB2ORCmRpTpliivHNw"))
         let ghost2Range = try XCTUnwrap(finding.description.range(of: "7OzQq5dhQMqEH8dQ1DKfvQ"))
-        XCTAssertLessThan(origRange.lowerBound, ghost1Range.lowerBound)
-        XCTAssertLessThan(origRange.lowerBound, ghost2Range.lowerBound)
+        XCTAssertLessThan(ghost1Range.lowerBound, origRange.lowerBound)
+        XCTAssertLessThan(ghost2Range.lowerBound, origRange.lowerBound)
     }
 
     // MARK: Edge cases
@@ -136,25 +137,28 @@ final class MulticamDuplicationCheckTests: XCTestCase {
         XCTAssertTrue(MulticamDuplicationCheck().run(on: doc).isEmpty)
     }
 
-    func testAuthoritativeMasterIsNewestModDate() {
+    func testLikelyOriginalIsOldestModDate() {
+        // Ghosts are born with a fresh modDate when FCP creates them during
+        // match-frame. An untouched original keeps its ancient creation date.
+        // So oldest modDate = likely original, newest = likely ghost.
         let older = Date(timeIntervalSince1970: 1_700_000_000)
         let newer = Date(timeIntervalSince1970: 1_800_000_000)
         let doc = FCPXMLDocument(
             version: "1.14",
             medias: [
-                makeMedia(id: "r1", uid: "Ghost", name: "ghost", modDate: older, angleIDs: ["a"]),
-                makeMedia(id: "r2", uid: "Master", name: "master", modDate: newer, angleIDs: ["a"])
+                makeMedia(id: "r1", uid: "Original", name: "original", modDate: older, angleIDs: ["a"]),
+                makeMedia(id: "r2", uid: "Ghost", name: "ghost", modDate: newer, angleIDs: ["a"])
             ]
         )
         let findings = MulticamDuplicationCheck().run(on: doc)
         XCTAssertEqual(findings.count, 1)
         let desc = findings[0].description
-        // "Master" UID appears before "Ghost" UID in the rendered body.
-        guard let mRange = desc.range(of: "Master"),
+        guard let oRange = desc.range(of: "Original"),
               let gRange = desc.range(of: "Ghost") else {
             return XCTFail("UIDs missing from finding body")
         }
-        XCTAssertLessThan(mRange.lowerBound, gRange.lowerBound)
+        XCTAssertLessThan(oRange.lowerBound, gRange.lowerBound,
+                          "oldest modDate should be listed as likely original, first")
     }
 
     func testEmptyFingerprintDoesNotTrigger() {

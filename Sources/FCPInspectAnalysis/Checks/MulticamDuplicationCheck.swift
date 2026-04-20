@@ -47,11 +47,11 @@ public struct MulticamDuplicationCheck: Check {
     // MARK: Finding construction
 
     private func makeFinding(for group: [Media]) -> Finding {
-        let ranked = group.sorted(by: Self.masterFirst)
-        let master = ranked[0]
-        let ghosts = Array(ranked.dropFirst())
+        let ranked = group.sorted(by: Self.oldestFirst)
+        let likelyOriginal = ranked[0]
+        let likelyDuplicates = Array(ranked.dropFirst())
 
-        let angleCount = master.multicam?.angles.count ?? 0
+        let angleCount = likelyOriginal.multicam?.angles.count ?? 0
 
         var body = ""
         body += "Found \(group.count) multicam master objects sharing the same angle "
@@ -59,22 +59,29 @@ public struct MulticamDuplicationCheck: Check {
         body += "indicates \"ghost\" multicams created by match-frame operations on "
         body += "out-of-sync timeline references.\n\n"
 
-        body += "**Authoritative master:**\n"
-        body += "- `\(master.name)` (UID: \(master.uid)"
-        if let raw = master.modDateRaw { body += ", modDate: \(raw)" }
+        body += "**Likely original (oldest modDate):**\n"
+        body += "- `\(likelyOriginal.name)` (UID: \(likelyOriginal.uid)"
+        if let raw = likelyOriginal.modDateRaw { body += ", modDate: \(raw)" }
         body += ")\n\n"
 
-        body += "**Ghost duplicates:**\n"
-        for ghost in ghosts {
-            body += "- `\(ghost.name)` (UID: \(ghost.uid)"
-            if let raw = ghost.modDateRaw { body += ", modDate: \(raw)" }
+        body += "**Other masters with same fingerprint (newer — likely ghosts):**\n"
+        for candidate in likelyDuplicates {
+            body += "- `\(candidate.name)` (UID: \(candidate.uid)"
+            if let raw = candidate.modDateRaw { body += ", modDate: \(raw)" }
             body += ")\n"
         }
+
+        body += "\n_Note: a multicam's modDate only changes when its structure is edited (angle "
+        body += "order, format, etc.) — not when a timeline clip using it is edited. Ghosts are "
+        body += "normally created fresh by FCP during match-frame, so their modDate is newer than "
+        body += "the original. Verify by match-framing (Shift+F) a timeline instance to see which "
+        body += "master it points at._\n"
 
         let remediation = """
         Export the project as FCPXML and re-import into a fresh library. The \
         latent snapshot data that causes this duplication is not written to \
-        XML and will be discarded on round-trip.
+        XML and will be discarded on round-trip. Do not drag multicams \
+        between libraries — that copies the ghosts along.
         """
 
         let locations = group.map(\.location)
@@ -89,12 +96,15 @@ public struct MulticamDuplicationCheck: Check {
         )
     }
 
-    /// Orders a duplicate group so that the authoritative master comes
-    /// first. Newest `modDate` wins; ties break on `name` for determinism.
-    private static func masterFirst(_ a: Media, _ b: Media) -> Bool {
-        let lhs = a.modDate ?? .distantPast
-        let rhs = b.modDate ?? .distantPast
-        if lhs != rhs { return lhs > rhs }
+    /// Orders a duplicate group oldest-first. The oldest `modDate` is the
+    /// probable original, because multicam modDates only change on
+    /// structural edits, while ghosts are born with a fresh modDate when
+    /// FCP creates them during match-frame. Ties break on `name` for
+    /// deterministic output.
+    private static func oldestFirst(_ a: Media, _ b: Media) -> Bool {
+        let lhs = a.modDate ?? .distantFuture
+        let rhs = b.modDate ?? .distantFuture
+        if lhs != rhs { return lhs < rhs }
         return a.name < b.name
     }
 }
