@@ -74,26 +74,21 @@ final class MulticamDuplicationCheckTests: XCTestCase {
         XCTAssertEqual(finding.location.count, 3, "all three media locations should be attached")
 
         // All three UIDs must be surfaced.
-        XCTAssertTrue(
-            finding.description.contains("bE6PqP2TRO2D7xuONhMJQA"),
-            "ORIG UID should appear in finding"
-        )
-        XCTAssertTrue(
-            finding.description.contains("ARyUeB2ORCmRpTpliivHNw"),
-            "duplet1 UID should appear"
-        )
-        XCTAssertTrue(
-            finding.description.contains("7OzQq5dhQMqEH8dQ1DKfvQ"),
-            "duplet2 UID should appear"
-        )
+        XCTAssertTrue(finding.description.contains("bE6PqP2TRO2D7xuONhMJQA"), "ORIG UID should appear")
+        XCTAssertTrue(finding.description.contains("ARyUeB2ORCmRpTpliivHNw"), "duplet1 UID should appear")
+        XCTAssertTrue(finding.description.contains("7OzQq5dhQMqEH8dQ1DKfvQ"), "duplet2 UID should appear")
 
-        // Oldest modDate comes first. The duplets are both 2026-03-02 and
-        // ORIG is 2026-04-15, so a duplet UID appears before the ORIG UID.
+        // Unsuffixed `Multicam` is listed before `Multicam 1`/`Multicam 2`.
         let origRange = try XCTUnwrap(finding.description.range(of: "bE6PqP2TRO2D7xuONhMJQA"))
         let ghost1Range = try XCTUnwrap(finding.description.range(of: "ARyUeB2ORCmRpTpliivHNw"))
         let ghost2Range = try XCTUnwrap(finding.description.range(of: "7OzQq5dhQMqEH8dQ1DKfvQ"))
-        XCTAssertLessThan(ghost1Range.lowerBound, origRange.lowerBound)
-        XCTAssertLessThan(ghost2Range.lowerBound, origRange.lowerBound)
+        XCTAssertLessThan(origRange.lowerBound, ghost1Range.lowerBound)
+        XCTAssertLessThan(origRange.lowerBound, ghost2Range.lowerBound)
+
+        // No strong master/ghost labels — only neutral hints.
+        XCTAssertFalse(finding.description.contains("Likely original (oldest modDate)"))
+        XCTAssertTrue(finding.description.contains("likely original"))
+        XCTAssertTrue(finding.description.contains("likely ghost"))
     }
 
     // MARK: Edge cases
@@ -137,17 +132,18 @@ final class MulticamDuplicationCheckTests: XCTestCase {
         XCTAssertTrue(MulticamDuplicationCheck().run(on: doc).isEmpty)
     }
 
-    func testLikelyOriginalIsOldestModDate() {
-        // Ghosts are born with a fresh modDate when FCP creates them during
-        // match-frame. An untouched original keeps its ancient creation date.
-        // So oldest modDate = likely original, newest = likely ghost.
-        let older = Date(timeIntervalSince1970: 1_700_000_000)
-        let newer = Date(timeIntervalSince1970: 1_800_000_000)
+    func testUnsuffixedNameIsListedFirst() {
+        // `Multicam` (unsuffixed) should sort before `Multicam 1` regardless
+        // of which has the newer modDate — name is the stronger signal.
+        let newerDate = Date(timeIntervalSince1970: 1_800_000_000)
+        let olderDate = Date(timeIntervalSince1970: 1_700_000_000)
         let doc = FCPXMLDocument(
             version: "1.14",
             medias: [
-                makeMedia(id: "r1", uid: "Original", name: "original", modDate: older, angleIDs: ["a"]),
-                makeMedia(id: "r2", uid: "Ghost", name: "ghost", modDate: newer, angleIDs: ["a"])
+                // Ghost: has suffix + older modDate
+                makeMedia(id: "r1", uid: "Ghost", name: "Multicam 1", modDate: olderDate, angleIDs: ["a"]),
+                // Original: unsuffixed + newer modDate
+                makeMedia(id: "r2", uid: "Original", name: "Multicam", modDate: newerDate, angleIDs: ["a"])
             ]
         )
         let findings = MulticamDuplicationCheck().run(on: doc)
@@ -158,7 +154,7 @@ final class MulticamDuplicationCheckTests: XCTestCase {
             return XCTFail("UIDs missing from finding body")
         }
         XCTAssertLessThan(oRange.lowerBound, gRange.lowerBound,
-                          "oldest modDate should be listed as likely original, first")
+                          "unsuffixed name should be listed first as likely original")
     }
 
     func testEmptyFingerprintDoesNotTrigger() {

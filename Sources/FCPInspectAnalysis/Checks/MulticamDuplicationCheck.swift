@@ -47,35 +47,32 @@ public struct MulticamDuplicationCheck: Check {
     // MARK: Finding construction
 
     private func makeFinding(for group: [Media]) -> Finding {
-        let ranked = group.sorted(by: Self.oldestFirst)
-        let likelyOriginal = ranked[0]
-        let likelyDuplicates = Array(ranked.dropFirst())
-
-        let angleCount = likelyOriginal.multicam?.angles.count ?? 0
+        let ranked = group.sorted(by: Self.nameThenDate)
+        let angleCount = ranked[0].multicam?.angles.count ?? 0
 
         var body = ""
         body += "Found \(group.count) multicam master objects sharing the same angle "
-        body += "fingerprint (\(angleCount) angles) but with different UIDs. This typically "
-        body += "indicates \"ghost\" multicams created by match-frame operations on "
-        body += "out-of-sync timeline references.\n\n"
+        body += "fingerprint (\(angleCount) angles) but with different UIDs.\n\n"
 
-        body += "**Likely original (oldest modDate):**\n"
-        body += "- `\(likelyOriginal.name)` (UID: \(likelyOriginal.uid)"
-        if let raw = likelyOriginal.modDateRaw { body += ", modDate: \(raw)" }
-        body += ")\n\n"
-
-        body += "**Other masters with same fingerprint (newer — likely ghosts):**\n"
-        for candidate in likelyDuplicates {
-            body += "- `\(candidate.name)` (UID: \(candidate.uid)"
-            if let raw = candidate.modDateRaw { body += ", modDate: \(raw)" }
-            body += ")\n"
+        body += "**Masters in this group:**\n"
+        for media in ranked {
+            let hint = Self.nameHint(for: media.name)
+            body += "- `\(media.name)`"
+            body += " — UID: \(media.uid)"
+            if let raw = media.modDateRaw { body += " · modDate: \(raw)" }
+            if let hint = hint { body += "  _(\(hint))_" }
+            body += "\n"
         }
 
-        body += "\n_Note: a multicam's modDate only changes when its structure is edited (angle "
-        body += "order, format, etc.) — not when a timeline clip using it is edited. Ghosts are "
-        body += "normally created fresh by FCP during match-frame, so their modDate is newer than "
-        body += "the original. Verify by match-framing (Shift+F) a timeline instance to see which "
-        body += "master it points at._\n"
+        body += "\n_Which one is the original vs. a ghost cannot be determined from XML alone. "
+        body += "Two clues that can help you decide:_\n"
+        body += "- _**Name pattern**: FCP auto-names ghosts with a space-number suffix "
+        body += "(`Multicam`, `Multicam 1`, `Multicam 2`…). The unsuffixed name is typically the original._\n"
+        body += "- _**modDate**: changes only when a multicam's structure is edited (angle order, "
+        body += "format). If you've edited the original since a ghost was born, the original's "
+        body += "modDate will be newer — the opposite of what you'd intuit._\n"
+        body += "\n_Definitive check: in FCP, pick a timeline instance and press ⇧F (match-frame). "
+        body += "The master that opens in the Event browser is the one your timeline references._\n"
 
         let remediation = """
         Export the project as FCPXML and re-import into a fresh library. The \
@@ -96,15 +93,31 @@ public struct MulticamDuplicationCheck: Check {
         )
     }
 
-    /// Orders a duplicate group oldest-first. The oldest `modDate` is the
-    /// probable original, because multicam modDates only change on
-    /// structural edits, while ghosts are born with a fresh modDate when
-    /// FCP creates them during match-frame. Ties break on `name` for
-    /// deterministic output.
-    private static func oldestFirst(_ a: Media, _ b: Media) -> Bool {
+    /// Orders masters in a neutral, deterministic way for presentation.
+    /// Prefers the unsuffixed "base" name first (most likely candidate for
+    /// original per FCP's auto-naming), then by modDate ascending, then name.
+    private static func nameThenDate(_ a: Media, _ b: Media) -> Bool {
+        let aHasSuffix = nameHasGhostSuffix(a.name)
+        let bHasSuffix = nameHasGhostSuffix(b.name)
+        if aHasSuffix != bHasSuffix { return !aHasSuffix }
+
         let lhs = a.modDate ?? .distantFuture
         let rhs = b.modDate ?? .distantFuture
         if lhs != rhs { return lhs < rhs }
         return a.name < b.name
+    }
+
+    /// Matches FCP's auto-generated ghost naming: a trailing space followed
+    /// by digits (e.g. `"Multicam 1"`, `"Multicam 17"`).
+    private static func nameHasGhostSuffix(_ name: String) -> Bool {
+        let pattern = #" \d+$"#
+        return name.range(of: pattern, options: .regularExpression) != nil
+    }
+
+    private static func nameHint(for name: String) -> String? {
+        if nameHasGhostSuffix(name) {
+            return "suffix matches FCP auto-naming → likely ghost"
+        }
+        return "unsuffixed name → likely original"
     }
 }
