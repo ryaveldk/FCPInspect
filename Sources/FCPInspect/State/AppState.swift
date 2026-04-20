@@ -27,8 +27,16 @@ final class AppState: ObservableObject {
 
     @Published private(set) var sources: [LoadedSource] = []
     @Published private(set) var findings: [Finding] = []
+    @Published var overview: DocumentOverview = DocumentOverview(sections: [])
     @Published var selectedFindingID: Finding.ID?
+    @Published var primaryTab: PrimaryTab = .overview
     @Published private(set) var errorMessages: [String] = []
+
+    enum PrimaryTab: String, CaseIterable, Identifiable {
+        case overview = "Overblik"
+        case findings = "Diagnoser"
+        var id: String { rawValue }
+    }
 
     // MARK: Dependencies
 
@@ -150,6 +158,7 @@ final class AppState: ObservableObject {
             medias: sources.flatMap { $0.document.medias }
         )
         findings = engine.run(on: merged)
+        overview = DocumentOverview.build(from: sources.map { ($0.url, $0.document) })
         if let current = selectedFindingID, !findings.contains(where: { $0.id == current }) {
             selectedFindingID = nil
         }

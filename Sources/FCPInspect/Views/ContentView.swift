@@ -9,11 +9,18 @@ struct ContentView: View {
         NavigationSplitView {
             SidebarView()
                 .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 320)
-        } content: {
-            FindingsListView(onRequestHelp: { isShowingHelp = true })
-                .navigationSplitViewColumnWidth(min: 280, ideal: 340)
         } detail: {
-            FindingDetailView()
+            VStack(spacing: 0) {
+                tabBar
+                Divider().background(Theme.stroke)
+                switch state.primaryTab {
+                case .overview:
+                    OverviewView()
+                case .findings:
+                    findingsPane
+                }
+            }
+            .background(Theme.canvas)
         }
         .navigationSplitViewStyle(.balanced)
         .toolbar {
@@ -65,6 +72,53 @@ struct ContentView: View {
         copyFeedbackVisible = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
             copyFeedbackVisible = false
+        }
+    }
+
+    // MARK: Tab bar
+
+    private var tabBar: some View {
+        HStack(spacing: 0) {
+            ForEach(AppState.PrimaryTab.allCases) { tab in
+                Button {
+                    state.primaryTab = tab
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(tab.rawValue)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(state.primaryTab == tab ? Theme.cyan : Theme.textSecondary)
+                        if tab == .findings, !state.findings.isEmpty {
+                            Text("\(state.findings.count)")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(Theme.canvas)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 1)
+                                .background(Capsule().fill(Theme.severityWarning))
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .contentShape(Rectangle())
+                    .overlay(alignment: .bottom) {
+                        Rectangle()
+                            .fill(state.primaryTab == tab ? Theme.cyan : Color.clear)
+                            .frame(height: 2)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .background(Theme.surface)
+    }
+
+    // MARK: Findings pane (composite — list + detail side by side)
+
+    private var findingsPane: some View {
+        HSplitView {
+            FindingsListView(onRequestHelp: { isShowingHelp = true })
+                .frame(minWidth: 280, idealWidth: 340)
+            FindingDetailView()
+                .frame(minWidth: 380)
         }
     }
 
