@@ -3,6 +3,7 @@ import FCPInspectAnalysis
 
 struct FindingsListView: View {
     @EnvironmentObject var state: AppState
+    var onRequestHelp: () -> Void = {}
 
     var body: some View {
         Group {
@@ -19,7 +20,7 @@ struct FindingsListView: View {
 
     @ViewBuilder private var emptyState: some View {
         if state.sources.isEmpty {
-            DropZone()
+            DropZone(onRequestHelp: onRequestHelp)
         } else {
             VStack(spacing: 10) {
                 Image(systemName: "checkmark.seal.fill")

@@ -6,30 +6,50 @@ import UniformTypeIdentifiers
 /// so that dropping works from any pane once the app has content.
 struct DropZone: View {
     @EnvironmentObject var state: AppState
+    var onRequestHelp: () -> Void = {}
 
     var body: some View {
         VStack(spacing: 14) {
             Image(systemName: "tray.and.arrow.down.fill")
                 .font(.system(size: 48))
                 .foregroundStyle(Theme.cyan)
-            Text("Drop FCPXML files here")
+            Text("Træk FCPXML ind her")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)
-            Text(".fcpxml files, .fcpxmld bundles, or whole folders")
+            Text(".fcpxml-filer, .fcpxmld-bundles eller hele mapper")
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textSecondary)
-            Button {
-                state.presentOpenPanel()
-            } label: {
-                Text("Open…")
+            HStack(spacing: 10) {
+                Button {
+                    state.presentOpenPanel()
+                } label: {
+                    Text("Åbn…")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Theme.canvas)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 7)
+                        .background(Capsule().fill(Theme.cyan))
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut("o")
+
+                Button {
+                    onRequestHelp()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "questionmark.circle")
+                        Text("Sådan gør du")
+                    }
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Theme.canvas)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 7)
-                    .background(Capsule().fill(Theme.cyan))
+                    .foregroundStyle(Theme.cyan)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 6)
+                    .overlay(
+                        Capsule().stroke(Theme.cyan.opacity(0.55), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
-            .keyboardShortcut("o")
             .padding(.top, 6)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

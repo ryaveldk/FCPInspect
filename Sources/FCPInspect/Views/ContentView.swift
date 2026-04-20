@@ -2,13 +2,14 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var state: AppState
+    @State private var isShowingHelp = false
 
     var body: some View {
         NavigationSplitView {
             SidebarView()
                 .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 320)
         } content: {
-            FindingsListView()
+            FindingsListView(onRequestHelp: { isShowingHelp = true })
                 .navigationSplitViewColumnWidth(min: 280, ideal: 340)
         } detail: {
             FindingDetailView()
@@ -18,6 +19,17 @@ struct ContentView: View {
             ToolbarItem(placement: .primaryAction) {
                 toolbarSummary
             }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    isShowingHelp = true
+                } label: {
+                    Label("Sådan gør du", systemImage: "questionmark.circle")
+                }
+                .help("Sådan finder og retter du ghost-multicams")
+            }
+        }
+        .sheet(isPresented: $isShowingHelp) {
+            HelpSheet()
         }
         .background(Theme.canvas)
         .preferredColorScheme(.dark)
